@@ -62,6 +62,15 @@ const (
 	// passed to pgctld via POSTGRES_INITDB_EXTRA_CONF.
 	PostgresConfigFilePath = PostgresConfigMountPath + "/postgresql.conf"
 
+	// PostgresExporterQueriesVolumeName is the volume for the custom exporter queries.
+	PostgresExporterQueriesVolumeName = "postgres-exporter-queries"
+
+	// PostgresExporterQueriesMountPath is where the custom exporter queries are mounted.
+	PostgresExporterQueriesMountPath = "/etc/postgres-exporter"
+
+	// PostgresExporterQueriesFilePath is passed to the exporter via --extend.query-path.
+	PostgresExporterQueriesFilePath = PostgresExporterQueriesMountPath + "/queries.yaml"
+
 	// PostgresPasswordSecretKey is the key within the Secret that holds the password
 	PostgresPasswordSecretKey = "password"
 
@@ -309,12 +318,34 @@ func buildPostgresExporterContainer(
 	shard *multigresv1alpha1.Shard,
 	pool multigresv1alpha1.PoolSpec,
 ) corev1.Container {
+	args := []string{
+		"--web.listen-address=:9187",
+	}
+	volumeMounts := []corev1.VolumeMount{
+		postgresPasswordVolumeMount(),
+	}
+
+	if exporter := shard.Spec.PostgresExporter; exporter != nil {
+		if exporter.DisableDefaultMetrics {
+			args = append(args,
+				"--disable-default-metrics",
+				"--disable-settings-metrics",
+			)
+		}
+		if exporter.QueriesConfigRef != nil {
+			args = append(args, "--extend.query-path="+PostgresExporterQueriesFilePath)
+			volumeMounts = append(volumeMounts, corev1.VolumeMount{
+				Name:      PostgresExporterQueriesVolumeName,
+				MountPath: PostgresExporterQueriesMountPath,
+				ReadOnly:  true,
+			})
+		}
+	}
+
 	return corev1.Container{
 		Name:  "postgres-exporter",
 		Image: multigresv1alpha1.DefaultPostgresExporterImage,
-		Args: []string{
-			"--web.listen-address=:9187",
-		},
+		Args:  args,
 		Ports: buildPostgresExporterContainerPorts(),
 		Env: []corev1.EnvVar{
 			{
@@ -331,9 +362,7 @@ func buildPostgresExporterContainer(
 			},
 		},
 		SecurityContext: buildContainerSecurityContext(pool.FSGroup),
-		VolumeMounts: []corev1.VolumeMount{
-			postgresPasswordVolumeMount(),
-		},
+		VolumeMounts:    volumeMounts,
 	}
 }
 
@@ -582,6 +611,24 @@ func buildPostgresConfigVolume(ref *multigresv1alpha1.PostgresConfigRef) corev1.
 	}
 }
 
+// buildPostgresExporterQueriesVolume projects the user-provided ConfigMap key to
+// the queries.yaml filename the exporter reads via --extend.query-path.
+func buildPostgresExporterQueriesVolume(ref *multigresv1alpha1.PostgresConfigRef) corev1.Volume {
+	return corev1.Volume{
+		Name: PostgresExporterQueriesVolumeName,
+		VolumeSource: corev1.VolumeSource{
+			ConfigMap: &corev1.ConfigMapVolumeSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: ref.Name,
+				},
+				Items: []corev1.KeyToPath{
+					{Key: ref.Key, Path: "queries.yaml"},
+				},
+			},
+		},
+	}
+}
+
 func buildPoolVolumes(shard *multigresv1alpha1.Shard, cellName string) []corev1.Volume {
 	volumes := []corev1.Volume{
 		buildSharedBackupVolume(shard, cellName),
@@ -591,6 +638,10 @@ func buildPoolVolumes(shard *multigresv1alpha1.Shard, cellName string) []corev1.
 	}
 	if shard.Spec.PostgresConfigRef != nil {
 		volumes = append(volumes, buildPostgresConfigVolume(shard.Spec.PostgresConfigRef))
+	}
+	if exporter := shard.Spec.PostgresExporter; exporter != nil &&
+		exporter.QueriesConfigRef != nil {
+		volumes = append(volumes, buildPostgresExporterQueriesVolume(exporter.QueriesConfigRef))
 	}
 	if certVol := buildPgBackRestCertVolume(shard); certVol != nil {
 		volumes = append(volumes, *certVol)

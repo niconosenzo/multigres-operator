@@ -395,6 +395,11 @@ type ShardOverrides struct {
 	// +optional
 	PostgresConfigRef *PostgresConfigRef `json:"postgresConfigRef,omitempty"`
 
+	// PostgresExporter overrides the template's postgres_exporter configuration
+	// (custom queries and the default-metrics toggle).
+	// +optional
+	PostgresExporter *PostgresExporterConfig `json:"postgresExporter,omitempty"`
+
 	// Pools overrides. Keyed by pool name.
 	// +optional
 	// +kubebuilder:validation:MaxProperties=8
@@ -422,6 +427,11 @@ type ShardInlineSpec struct {
 	// POSTGRES_INITDB_EXTRA_CONF on pgctld.
 	// +optional
 	PostgresConfigRef *PostgresConfigRef `json:"postgresConfigRef,omitempty"`
+
+	// PostgresExporter configures the postgres_exporter sidecar (custom queries
+	// and the default-metrics toggle) for this shard.
+	// +optional
+	PostgresExporter *PostgresExporterConfig `json:"postgresExporter,omitempty"`
 
 	// Pools configuration. Keyed by pool name.
 	// +optional

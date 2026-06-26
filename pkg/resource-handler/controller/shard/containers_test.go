@@ -432,6 +432,128 @@ func TestBuildPostgresExporterContainer(t *testing.T) {
 	}
 }
 
+func TestBuildPostgresExporterContainer_Options(t *testing.T) {
+	queriesMount := corev1.VolumeMount{
+		Name:      PostgresExporterQueriesVolumeName,
+		MountPath: PostgresExporterQueriesMountPath,
+		ReadOnly:  true,
+	}
+
+	tests := map[string]struct {
+		exporter         *multigresv1alpha1.PostgresExporterConfig
+		wantArgs         []string
+		wantQueriesMount bool
+	}{
+		"nil exporter keeps defaults": {
+			exporter: nil,
+			wantArgs: []string{"--web.listen-address=:9187"},
+		},
+		"disable default metrics only": {
+			exporter: &multigresv1alpha1.PostgresExporterConfig{DisableDefaultMetrics: true},
+			wantArgs: []string{
+				"--web.listen-address=:9187",
+				"--disable-default-metrics",
+				"--disable-settings-metrics",
+			},
+		},
+		"custom queries only": {
+			exporter: &multigresv1alpha1.PostgresExporterConfig{
+				QueriesConfigRef: &multigresv1alpha1.PostgresConfigRef{
+					Name: "q",
+					Key:  "queries.yaml",
+				},
+			},
+			wantArgs: []string{
+				"--web.listen-address=:9187",
+				"--extend.query-path=" + PostgresExporterQueriesFilePath,
+			},
+			wantQueriesMount: true,
+		},
+		"custom only (VM parity)": {
+			exporter: &multigresv1alpha1.PostgresExporterConfig{
+				DisableDefaultMetrics: true,
+				QueriesConfigRef: &multigresv1alpha1.PostgresConfigRef{
+					Name: "q",
+					Key:  "queries.yaml",
+				},
+			},
+			wantArgs: []string{
+				"--web.listen-address=:9187",
+				"--disable-default-metrics",
+				"--disable-settings-metrics",
+				"--extend.query-path=" + PostgresExporterQueriesFilePath,
+			},
+			wantQueriesMount: true,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			shard := &multigresv1alpha1.Shard{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-shard"},
+				Spec:       multigresv1alpha1.ShardSpec{PostgresExporter: tc.exporter},
+			}
+
+			got := buildPostgresExporterContainer(shard, multigresv1alpha1.PoolSpec{})
+
+			if diff := cmp.Diff(tc.wantArgs, got.Args); diff != "" {
+				t.Errorf("args mismatch (-want +got):\n%s", diff)
+			}
+
+			hasQueriesMount := false
+			for _, m := range got.VolumeMounts {
+				if m.Name == PostgresExporterQueriesVolumeName {
+					hasQueriesMount = true
+					if diff := cmp.Diff(queriesMount, m); diff != "" {
+						t.Errorf("queries mount mismatch (-want +got):\n%s", diff)
+					}
+				}
+			}
+			if hasQueriesMount != tc.wantQueriesMount {
+				t.Errorf(
+					"queries mount present = %v, want %v",
+					hasQueriesMount,
+					tc.wantQueriesMount,
+				)
+			}
+		})
+	}
+}
+
+func TestBuildPoolVolumes_ExporterQueries(t *testing.T) {
+	shard := &multigresv1alpha1.Shard{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-shard"},
+		Spec: multigresv1alpha1.ShardSpec{
+			PostgresExporter: &multigresv1alpha1.PostgresExporterConfig{
+				QueriesConfigRef: &multigresv1alpha1.PostgresConfigRef{
+					Name: "my-queries",
+					Key:  "queries.yaml",
+				},
+			},
+		},
+	}
+
+	volumes := buildPoolVolumes(shard, "cell1")
+
+	var found *corev1.Volume
+	for i := range volumes {
+		if volumes[i].Name == PostgresExporterQueriesVolumeName {
+			found = &volumes[i]
+		}
+	}
+	if found == nil {
+		t.Fatalf("expected volume %q in pool volumes", PostgresExporterQueriesVolumeName)
+	}
+	if found.ConfigMap == nil || found.ConfigMap.Name != "my-queries" {
+		t.Fatalf("expected ConfigMap source %q, got %+v", "my-queries", found.VolumeSource)
+	}
+	if len(found.ConfigMap.Items) != 1 ||
+		found.ConfigMap.Items[0].Key != "queries.yaml" ||
+		found.ConfigMap.Items[0].Path != "queries.yaml" {
+		t.Fatalf("expected key->path projection to queries.yaml, got %+v", found.ConfigMap.Items)
+	}
+}
+
 func TestPoolContainers_CustomPostgresSuperuser(t *testing.T) {
 	const customSuperuser = "admin"
 

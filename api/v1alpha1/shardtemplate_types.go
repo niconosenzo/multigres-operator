@@ -44,6 +44,11 @@ type ShardTemplateSpec struct {
 	// +optional
 	PostgresConfigRef *PostgresConfigRef `json:"postgresConfigRef,omitempty"`
 
+	// PostgresExporter configures the postgres_exporter sidecar (custom queries
+	// and the default-metrics toggle) for shards using this template.
+	// +optional
+	PostgresExporter *PostgresExporterConfig `json:"postgresExporter,omitempty"`
+
 	// +optional
 	// +kubebuilder:validation:MaxProperties=8
 	// +kubebuilder:validation:XValidation:rule="self.all(key, size(key) < 63)",message="pool names must be < 63 chars"

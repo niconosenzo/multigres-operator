@@ -56,6 +56,7 @@ func BuildShard(
 			MultiOrch:         shardSpec.MultiOrch,
 			InitdbArgs:        shardSpec.InitdbArgs,
 			PostgresConfigRef: shardSpec.PostgresConfigRef,
+			PostgresExporter:  shardSpec.PostgresExporter,
 			Pools:             shardSpec.Pools,
 			Replicas:          calculateTotalReplicas(shardSpec.Pools),
 			// Merge hierarchy: Shard → TableGroup

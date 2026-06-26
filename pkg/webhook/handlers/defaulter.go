@@ -217,7 +217,7 @@ func (d *MultigresClusterDefaulter) Default(ctx context.Context, obj runtime.Obj
 				if !isUsingTemplate {
 					// We pass cell names for contextual cell defaulting, but leave
 					// MaterializeCellDefaults false so the stored spec remains dynamic.
-					multiOrchSpec, poolsSpec, resolvedPvcPolicy, resolvedBackupConfig, resolvedInitdbArgs, resolvedPostgresConfigRef, err := scopedResolver.ResolveShard(
+					multiOrchSpec, poolsSpec, resolvedPvcPolicy, resolvedBackupConfig, resolvedInitdbArgs, resolvedPostgresConfigRef, resolvedPostgresExporter, err := scopedResolver.ResolveShard(
 						ctx,
 						shard,
 						resolver.ResolveShardOptions{
@@ -242,6 +242,7 @@ func (d *MultigresClusterDefaulter) Default(ctx context.Context, obj runtime.Obj
 						MultiOrch:         *multiOrchSpec,
 						InitdbArgs:        resolvedInitdbArgs,
 						PostgresConfigRef: resolvedPostgresConfigRef,
+						PostgresExporter:  resolvedPostgresExporter,
 						Pools:             poolsSpec,
 						PVCDeletionPolicy: pvcPolicy,
 					}

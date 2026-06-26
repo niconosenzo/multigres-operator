@@ -103,6 +103,12 @@ const (
 	// a different hash, which changes the spec-hash and triggers a rolling update.
 	AnnotationPostgresConfigHash = "multigres.com/postgres-config-hash"
 
+	// AnnotationPostgresExporterQueriesHash stores the SHA-256 hash of the
+	// referenced postgres_exporter queries ConfigMap data. Changes to the
+	// ConfigMap content produce a different hash, which changes the spec-hash and
+	// triggers a rolling update of the exporter sidecar.
+	AnnotationPostgresExporterQueriesHash = "multigres.com/postgres-exporter-queries-hash"
+
 	// AnnotationDrainState is used to coordinate graceful scale down between
 	// the resource-handler (Kubernetes) and data-handler (etcd).
 	AnnotationDrainState = "drain.multigres.com/state"

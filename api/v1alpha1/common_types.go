@@ -297,6 +297,26 @@ type PostgresConfigRef struct {
 	Key string `json:"key"`
 }
 
+// PostgresExporterConfig configures the postgres_exporter sidecar that scrapes
+// metrics from the local PostgreSQL instance. The two options are orthogonal and
+// compose into every case: defaults-only (both unset, the default), defaults plus
+// custom queries (QueriesConfigRef set), or custom-only (both set, VM parity).
+type PostgresExporterConfig struct {
+	// DisableDefaultMetrics, when true, passes --disable-default-metrics and
+	// --disable-settings-metrics so the exporter serves only the metrics from
+	// QueriesConfigRef. Defaults to false (upstream default metrics enabled),
+	// preserving today's behavior for non-Supabase users.
+	// +optional
+	DisableDefaultMetrics bool `json:"disableDefaultMetrics,omitempty"`
+
+	// QueriesConfigRef references a ConfigMap containing a custom queries.yaml.
+	// The operator mounts it and sets --extend.query-path so the exporter serves
+	// these queries in addition to (or instead of, when DisableDefaultMetrics is
+	// true) the default metrics. The ConfigMap must exist in the same namespace.
+	// +optional
+	QueriesConfigRef *PostgresConfigRef `json:"queriesConfigRef,omitempty"`
+}
+
 // IPAddress is a validated IPv4 or IPv6 address string.
 // +kubebuilder:validation:MinLength=3
 // +kubebuilder:validation:MaxLength=45

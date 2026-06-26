@@ -123,6 +123,11 @@ type ShardResolvedSpec struct {
 	// +optional
 	PostgresConfigRef *PostgresConfigRef `json:"postgresConfigRef,omitempty"`
 
+	// PostgresExporter is the resolved postgres_exporter configuration for this
+	// shard (custom queries and the default-metrics toggle).
+	// +optional
+	PostgresExporter *PostgresExporterConfig `json:"postgresExporter,omitempty"`
+
 	// Pools is the map of fully resolved data pool configurations.
 	// +kubebuilder:validation:MaxProperties=8
 	// +kubebuilder:validation:XValidation:rule="self.all(key, size(key) < 63)",message="pool names must be < 63 chars"

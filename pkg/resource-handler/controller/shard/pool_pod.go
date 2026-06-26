@@ -88,6 +88,9 @@ func BuildPoolPod(
 	if h := shard.Annotations[metadata.AnnotationPostgresConfigHash]; h != "" {
 		annotations[metadata.AnnotationPostgresConfigHash] = h
 	}
+	if h := shard.Annotations[metadata.AnnotationPostgresExporterQueriesHash]; h != "" {
+		annotations[metadata.AnnotationPostgresExporterQueriesHash] = h
+	}
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -241,6 +244,10 @@ func ComputeSpecHash(pod *corev1.Pod) string {
 
 	if v := pod.Annotations[metadata.AnnotationPostgresConfigHash]; v != "" {
 		_, _ = fmt.Fprintf(h, "pgcfg=%s", v)
+	}
+
+	if v := pod.Annotations[metadata.AnnotationPostgresExporterQueriesHash]; v != "" {
+		_, _ = fmt.Fprintf(h, "pgexporter=%s", v)
 	}
 
 	return hex.EncodeToString(h.Sum(nil))

@@ -328,6 +328,28 @@ func (r *ShardReconciler) Reconcile(
 		shard.Annotations[metadata.AnnotationPostgresConfigHash] = configHash
 	}
 
+	// Compute exporter queries hash so edits to the queries ConfigMap roll the
+	// postgres-exporter sidecar via the same spec-hash mechanism.
+	if shard.Spec.PostgresExporter != nil && shard.Spec.PostgresExporter.QueriesConfigRef != nil {
+		queriesHash, err := r.computePostgresExporterQueriesHash(ctx, shard)
+		if err != nil {
+			logger.Error(err, "Failed to compute postgres exporter queries hash")
+			r.Recorder.Eventf(
+				shard,
+				"Warning",
+				"ConfigError",
+				"Failed to read postgres exporter queries ConfigMap %q: %v",
+				shard.Spec.PostgresExporter.QueriesConfigRef.Name,
+				err,
+			)
+			return ctrl.Result{}, err
+		}
+		if shard.Annotations == nil {
+			shard.Annotations = make(map[string]string)
+		}
+		shard.Annotations[metadata.AnnotationPostgresExporterQueriesHash] = queriesHash
+	}
+
 	{
 		ctx, childSpan := monitoring.StartChildSpan(ctx, "Shard.ReconcilePools")
 		for poolName, pool := range shard.Spec.Pools {
@@ -636,11 +658,33 @@ func (r *ShardReconciler) computePostgresConfigHash(
 	ctx context.Context,
 	shard *multigresv1alpha1.Shard,
 ) (string, error) {
-	ref := shard.Spec.PostgresConfigRef
+	return r.computeConfigMapKeyHash(ctx, shard.Namespace, shard.Spec.PostgresConfigRef)
+}
 
+// computePostgresExporterQueriesHash returns a SHA-256 hex digest of the
+// postgres_exporter queries ConfigMap data, used to roll the exporter sidecar
+// when the custom queries change.
+func (r *ShardReconciler) computePostgresExporterQueriesHash(
+	ctx context.Context,
+	shard *multigresv1alpha1.Shard,
+) (string, error) {
+	return r.computeConfigMapKeyHash(
+		ctx,
+		shard.Namespace,
+		shard.Spec.PostgresExporter.QueriesConfigRef,
+	)
+}
+
+// computeConfigMapKeyHash fetches the referenced ConfigMap and returns a
+// SHA-256 hex digest of the referenced key's data.
+func (r *ShardReconciler) computeConfigMapKeyHash(
+	ctx context.Context,
+	namespace string,
+	ref *multigresv1alpha1.PostgresConfigRef,
+) (string, error) {
 	cm := &corev1.ConfigMap{}
 	if err := r.Get(ctx, client.ObjectKey{
-		Namespace: shard.Namespace,
+		Namespace: namespace,
 		Name:      ref.Name,
 	}, cm); err != nil {
 		return "", fmt.Errorf("failed to get ConfigMap %q: %w", ref.Name, err)
@@ -656,7 +700,8 @@ func (r *ShardReconciler) computePostgresConfigHash(
 }
 
 // enqueueFromPostgresConfigMap returns reconcile requests for Shards that
-// reference the changed ConfigMap via spec.postgresConfigRef.name.
+// reference the changed ConfigMap via spec.postgresConfigRef.name or
+// spec.postgresExporter.queriesConfigRef.name.
 func (r *ShardReconciler) enqueueFromPostgresConfigMap(
 	ctx context.Context,
 	o client.Object,
@@ -668,7 +713,12 @@ func (r *ShardReconciler) enqueueFromPostgresConfigMap(
 
 	var requests []reconcile.Request
 	for _, s := range shards.Items {
-		if s.Spec.PostgresConfigRef != nil && s.Spec.PostgresConfigRef.Name == o.GetName() {
+		matchesPostgresConfig := s.Spec.PostgresConfigRef != nil &&
+			s.Spec.PostgresConfigRef.Name == o.GetName()
+		matchesExporterQueries := s.Spec.PostgresExporter != nil &&
+			s.Spec.PostgresExporter.QueriesConfigRef != nil &&
+			s.Spec.PostgresExporter.QueriesConfigRef.Name == o.GetName()
+		if matchesPostgresConfig || matchesExporterQueries {
 			requests = append(requests, reconcile.Request{
 				NamespacedName: client.ObjectKeyFromObject(&s),
 			})

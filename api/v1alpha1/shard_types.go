@@ -151,6 +151,12 @@ type ShardSpec struct {
 	// +optional
 	PostgresConfigRef *PostgresConfigRef `json:"postgresConfigRef,omitempty"`
 
+	// PostgresExporter configures the postgres_exporter sidecar (custom queries
+	// and default-metrics toggle). When nil, the exporter runs with upstream
+	// defaults and no custom queries.
+	// +optional
+	PostgresExporter *PostgresExporterConfig `json:"postgresExporter,omitempty"`
+
 	// Pools is the map of fully resolved data pool configurations.
 	// +kubebuilder:validation:MaxProperties=8
 	// +kubebuilder:validation:XValidation:rule="self.all(key, size(key) < 63)",message="pool names must be < 63 chars"

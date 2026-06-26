@@ -2330,6 +2330,41 @@ spec:
                 - key
                 - name
                 type: object
+              postgresExporter:
+                description: |-
+                  PostgresExporter configures the postgres_exporter sidecar (custom queries
+                  and the default-metrics toggle) for shards using this template.
+                properties:
+                  disableDefaultMetrics:
+                    description: |-
+                      DisableDefaultMetrics, when true, passes --disable-default-metrics and
+                      --disable-settings-metrics so the exporter serves only the metrics from
+                      QueriesConfigRef. Defaults to false (upstream default metrics enabled),
+                      preserving today's behavior for non-Supabase users.
+                    type: boolean
+                  queriesConfigRef:
+                    description: |-
+                      QueriesConfigRef references a ConfigMap containing a custom queries.yaml.
+                      The operator mounts it and sets --extend.query-path so the exporter serves
+                      these queries in addition to (or instead of, when DisableDefaultMetrics is
+                      true) the default metrics. The ConfigMap must exist in the same namespace.
+                    properties:
+                      key:
+                        description: Key is the key within the ConfigMap's data that
+                          contains the postgresql.conf content.
+                        maxLength: 253
+                        minLength: 1
+                        type: string
+                      name:
+                        description: Name is the name of the ConfigMap.
+                        maxLength: 253
+                        minLength: 1
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                type: object
               pvcDeletionPolicy:
                 description: PVCDeletionPolicy controls PVC lifecycle management for
                   this shard template.
